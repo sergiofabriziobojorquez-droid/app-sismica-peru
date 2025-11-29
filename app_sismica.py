@@ -149,7 +149,6 @@ if st.button("🚀 EJECUTAR ANÁLISIS COMPLETO", type="primary", use_container_w
         fuerzas_modales = np.zeros((n, n))
         
         for i in range(n):
-            # Espectro
             T = 2 * np.pi / w[i] if w[i] > 0 else 0
             C = calcular_C(T, Tp, Tl)
             Sa = (Z * U * C * S * g) / R
@@ -162,11 +161,9 @@ if st.button("🚀 EJECUTAR ANÁLISIS COMPLETO", type="primary", use_container_w
                 "Sd (m)": Sd
             })
             
-            # Desplazamientos Modales (u_i)
             u_i = Sd * gammas[i] * modos_visual[:, i]
             desplazamientos_modales[:, i] = u_i
             
-            # Fuerzas Modales (f_i)
             vector_M_Xi = np.dot(M, modos_visual[:, i])
             f_i = Sa * gammas[i] * vector_M_Xi
             fuerzas_modales[:, i] = f_i
@@ -174,10 +171,12 @@ if st.button("🚀 EJECUTAR ANÁLISIS COMPLETO", type="primary", use_container_w
         df_esp = pd.DataFrame(data_espectro)
 
         # --- D. COMBINACIONES Y DERIVAS ---
+        # 1. Criterios de Combinación
         u_sva = np.sum(np.abs(desplazamientos_modales), axis=1)
         u_rcsc = np.sqrt(np.sum(desplazamientos_modales**2, axis=1))
-        u_final = 0.25 * u_sva + 0.75 * u_rcsc
+        u_final = 0.25 * u_sva + 0.75 * u_rcsc # Desplazamiento Total (Absoluto)
         
+        # 2. Derivas
         desp_relativo = np.zeros(n)
         derivas = np.zeros(n)
         
@@ -191,9 +190,12 @@ if st.button("🚀 EJECUTAR ANÁLISIS COMPLETO", type="primary", use_container_w
             desp_relativo[k] = delta
             derivas[k] = delta / h_piso if h_piso > 0 else 0
 
+        # Tabla consolidada con Criterios + Derivas
         df_desp = pd.DataFrame({
             "Nivel": [f"Piso {k+1}" for k in range(n)],
-            "u Absoluto [m]": u_final,
+            "u (SVA) [m]": u_sva,       # <-- AÑADIDO
+            "u (RCSC) [m]": u_rcsc,     # <-- AÑADIDO
+            "u (25/75) [m]": u_final,
             "Δ Relativo [m]": desp_relativo,
             "Altura h [m]": datos_altura,
             "Deriva (Δ/h)": derivas
@@ -214,19 +216,19 @@ if st.button("🚀 EJECUTAR ANÁLISIS COMPLETO", type="primary", use_container_w
         # ==========================================
         # 3. PESTAÑAS DE RESULTADOS
         # ==========================================
-        tabs = st.tabs(["📊 Dinámica", "🔢 Matrices", "🇵🇪 Espectro", "📉 Derivas", "🏗️ Fuerzas"])
+        tabs = st.tabs(["📊 Dinámica", "🔢 Matrices", "🇵🇪 Espectro", "📉 Desplazamientos", "🏗️ Fuerzas"])
 
-        # 1. DINÁMICA (CORREGIDA)
+        # 1. DINÁMICA
         with tabs[0]:
             st.subheader("1. Frecuencias y Periodos")
-            # --- AQUÍ AÑADÍ OMEGA DE VUELTA ---
+            # --- OMEGA IS BACK ---
             res_dinamica = []
             for i in range(n):
                 T_val = 2 * np.pi / w[i] if w[i] > 0 else 0
                 res_dinamica.append({
                     "Modo": i+1,
                     "Periodo T (s)": f"{T_val:.4f}",
-                    "ω (rad/s)": f"{w[i]:.4f}" # Omega ha vuelto
+                    "ω (rad/s)": f"{w[i]:.4f}" 
                 })
             st.table(pd.DataFrame(res_dinamica))
 
@@ -273,7 +275,7 @@ if st.button("🚀 EJECUTAR ANÁLISIS COMPLETO", type="primary", use_container_w
             ax2.legend()
             st.pyplot(fig2)
 
-        # 4. DERIVAS
+        # 4. DESPLAZAMIENTOS
         with tabs[3]:
             st.subheader("A. Desplazamientos Modales (u_i)")
             st.latex(r"u_i = S_{di} \cdot r_i \cdot X_i")
@@ -281,16 +283,27 @@ if st.button("🚀 EJECUTAR ANÁLISIS COMPLETO", type="primary", use_container_w
             st.dataframe(df_u_modos.style.format("{:.4e}"), use_container_width=True)
             
             st.divider()
-            st.subheader("B. Control de Derivas (25/75)")
-            st.markdown(r"$\Delta_i = u_i - u_{i-1}$ (Desp. Relativo)")
-            st.markdown(r"$\text{Deriva}_i = \Delta_i / h_i$")
+            st.subheader("B. Combinación y Control de Derivas")
+            st.info("Regla E.030: Desplazamiento = 0.25 SVA + 0.75 RCSC")
             
+            # --- TABLA COMPLETA CON CRITERIOS Y DERIVAS ---
             st.dataframe(df_desp.style.format({
-                "u Absoluto [m]": "{:.6f}",
+                "u (SVA) [m]": "{:.6f}",    # Restaurado
+                "u (RCSC) [m]": "{:.6f}",   # Restaurado
+                "u (25/75) [m]": "{:.6f}",
                 "Δ Relativo [m]": "{:.6f}",
                 "Altura h [m]": "{:.2f}",
                 "Deriva (Δ/h)": "{:.6f}"
             }).background_gradient(cmap="Oranges", subset=["Deriva (Δ/h)"]), use_container_width=True)
+            
+            st.write("**Gráfico de Perfil de Desplazamientos (25/75):**")
+            fig3, ax3 = plt.subplots(figsize=(4, 6))
+            perfil = np.concatenate(([0], u_final))
+            ax3.plot(perfil, np.arange(n+1), marker='D', color='purple', linewidth=2)
+            ax3.set_xlabel("Desplazamiento u (m)")
+            ax3.set_ylabel("Nivel")
+            ax3.grid(True)
+            st.pyplot(fig3)
 
         # 5. FUERZAS
         with tabs[4]:
