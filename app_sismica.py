@@ -8,7 +8,7 @@ from scipy.linalg import eigh
 st.set_page_config(page_title="Ingeniería Sísmica PE", layout="centered")
 
 st.title("🇵🇪 Análisis Sísmico E.030")
-st.caption("Análisis Modal + Espectro de Diseño + Factores de Participación")
+st.caption("Análisis Modal + Espectro de Diseño + Masas Participativas")
 
 # ==========================================
 # 1. BLOQUE DE ENTRADA DE DATOS
@@ -90,15 +90,16 @@ if st.button("🚀 EJECUTAR ANÁLISIS COMPLETO", type="primary", use_container_w
             else:
                 K[i, i] = k_act
 
+        # solver eigh: devuelve vectores masa-normalizados (phi^T M phi = I)
         w2, modos_raw = eigh(K, M)
         w = np.sqrt(np.abs(w2))
         
         # Ordenar (Periodo mayor a menor)
         idx = w.argsort()
         w = w[idx]
-        modos_raw = modos_raw[:, idx] # Estos salen normalizados por masa de eigh
+        modos_raw = modos_raw[:, idx] 
 
-        # Crear modos escalados (Azotea = 1) para usarlos en la fórmula de tu PPT
+        # Crear modos escalados (Azotea = 1)
         modos_visual = np.zeros_like(modos_raw)
         for i in range(n):
             val_top = modos_raw[-1, i]
@@ -107,8 +108,7 @@ if st.button("🚀 EJECUTAR ANÁLISIS COMPLETO", type="primary", use_container_w
             else:
                 modos_visual[:, i] = modos_raw[:, i]
 
-        # --- B. CÁLCULO DE FACTORES DE PARTICIPACIÓN (SEGÚN TU IMAGEN) ---
-        # Vector de influencia r (vector columna de unos, tamaño = n_pisos)
+        # --- B. CÁLCULO DE FACTORES DE PARTICIPACIÓN ---
         vector_1 = np.ones(n) 
         masa_total = np.sum(datos_masa)
         
@@ -116,20 +116,12 @@ if st.button("🚀 EJECUTAR ANÁLISIS COMPLETO", type="primary", use_container_w
         suma_masa_efectiva = 0
         
         for i in range(n):
-            # Usamos el vector Xi (modos_visual) tal cual tu PPT
             Xi = modos_visual[:, i]
             
-            # Numerador: Xi_transpuesta * M * 1
             numerador = np.dot(Xi.T, np.dot(M, vector_1))
-            
-            # Denominador: Xi_transpuesta * M * Xi
             denominador = np.dot(Xi.T, np.dot(M, Xi))
             
-            # Factor de Participación (r_i o Gamma)
             gamma = numerador / denominador
-            
-            # Masa Efectiva (Ojo con la fórmula de masa efectiva usando Gamma general)
-            # Meff = (Numerador^2) / Denominador  <-- Esta es la fórmula general consistente con tu r_i
             masa_efectiva = (numerador**2) / denominador
             
             porcentaje = (masa_efectiva / masa_total) * 100
@@ -167,7 +159,7 @@ if st.button("🚀 EJECUTAR ANÁLISIS COMPLETO", type="primary", use_container_w
         # ==========================================
         # 3. RESULTADOS EN PESTAÑAS
         # ==========================================
-        tab_din, tab_mat, tab_e030 = st.tabs(["📊 Dinámica", "🔢 Matrices y Factores", "🇵🇪 Espectro E.030"])
+        tab_din, tab_mat, tab_e030 = st.tabs(["📊 Dinámica", "🔢 Matrices y Vectores", "🇵🇪 Espectro E.030"])
 
         with tab_din:
             st.subheader("1. Frecuencias y Periodos")
@@ -191,17 +183,27 @@ if st.button("🚀 EJECUTAR ANÁLISIS COMPLETO", type="primary", use_container_w
             ax.axvline(0, color='black', linewidth=1)
             st.pyplot(fig)
 
+        # --- AQUÍ ESTÁ EL CAMBIO SOLICITADO ---
         with tab_mat:
             cols = [f"Modo {i+1}" for i in range(n)]
             rows = [f"Piso {i+1}" for i in range(n)]
 
-            st.subheader("A. Modos Escalados (Xi)")
-            st.caption("Normalizados tal que Azotea = 1.00 (Usados para calcular Gamma)")
+            # 1. Vectores Escalados (Visuales)
+            st.subheader("A. Vectores Escalados (Xi)")
+            st.caption("Normalizados tal que Azotea = 1.00 (Usados para cálculo de Gamma)")
             st.dataframe(pd.DataFrame(modos_visual, index=rows, columns=cols).style.format("{:.4f}"), use_container_width=True)
 
             st.divider()
+
+            # 2. Vectores Masa-Normalizados (Sin escalar)
+            st.subheader("B. Vectores Masa-Normalizados")
+            st.caption("Vectores Matemáticos directos del Solver ($φ^T M φ = I$)")
+            st.dataframe(pd.DataFrame(modos_raw, index=rows, columns=cols).style.background_gradient(cmap="Blues"), use_container_width=True)
+
+            st.divider()
             
-            st.subheader("B. Factores de Participación (r_i)")
+            # 3. Factores de Participación
+            st.subheader("C. Factores de Participación (r_i)")
             st.latex(r"r_i = \frac{X_i^T \cdot M \cdot \{1\}}{X_i^T \cdot M \cdot X_i}")
             
             st.dataframe(df_part.style.format({
@@ -232,6 +234,7 @@ if st.button("🚀 EJECUTAR ANÁLISIS COMPLETO", type="primary", use_container_w
             ax2.grid(True, linestyle="--", alpha=0.5)
             ax2.legend()
             st.pyplot(fig2)
+
 
 
 
