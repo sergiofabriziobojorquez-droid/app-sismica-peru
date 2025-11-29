@@ -90,7 +90,7 @@ if st.button("🚀 EJECUTAR ANÁLISIS COMPLETO", type="primary", use_container_w
             else:
                 K[i, i] = k_act
 
-        # solver eigh: devuelve vectores masa-normalizados (phi^T M phi = I)
+        # solver eigh
         w2, modos_raw = eigh(K, M)
         w = np.sqrt(np.abs(w2))
         
@@ -99,7 +99,7 @@ if st.button("🚀 EJECUTAR ANÁLISIS COMPLETO", type="primary", use_container_w
         w = w[idx]
         modos_raw = modos_raw[:, idx] 
 
-        # Crear modos escalados (Azotea = 1)
+        # Crear modos escalados (Azotea = 1) -> ESTOS SON LOS NORMALIZADOS PARA TI
         modos_visual = np.zeros_like(modos_raw)
         for i in range(n):
             val_top = modos_raw[-1, i]
@@ -183,26 +183,26 @@ if st.button("🚀 EJECUTAR ANÁLISIS COMPLETO", type="primary", use_container_w
             ax.axvline(0, color='black', linewidth=1)
             st.pyplot(fig)
 
-        # --- AQUÍ ESTÁ EL CAMBIO SOLICITADO ---
+        # --- PESTAÑA MATRICES Y VECTORES (TITULOS CORREGIDOS) ---
         with tab_mat:
             cols = [f"Modo {i+1}" for i in range(n)]
             rows = [f"Piso {i+1}" for i in range(n)]
 
-            # 1. Vectores Escalados (Visuales)
-            st.subheader("A. Vectores Escalados (Xi)")
-            st.caption("Normalizados tal que Azotea = 1.00 (Usados para cálculo de Gamma)")
+            # A. Vectores Normalizados (Azotea = 1)
+            st.subheader("A. Vectores Normalizados")
+            st.caption("Valores escalados con Azotea = 1.00 (Usados para Gamma)")
             st.dataframe(pd.DataFrame(modos_visual, index=rows, columns=cols).style.format("{:.4f}"), use_container_width=True)
 
             st.divider()
 
-            # 2. Vectores Masa-Normalizados (Sin escalar)
-            st.subheader("B. Vectores Masa-Normalizados")
-            st.caption("Vectores Matemáticos directos del Solver ($φ^T M φ = I$)")
+            # B. Vectores sin normalizar (Matemáticos)
+            st.subheader("B. Vectores sin normalizar")
+            st.caption("Valores matemáticos directos del Solver")
             st.dataframe(pd.DataFrame(modos_raw, index=rows, columns=cols).style.background_gradient(cmap="Blues"), use_container_width=True)
 
             st.divider()
             
-            # 3. Factores de Participación
+            # C. Factores de Participación
             st.subheader("C. Factores de Participación (r_i)")
             st.latex(r"r_i = \frac{X_i^T \cdot M \cdot \{1\}}{X_i^T \cdot M \cdot X_i}")
             
