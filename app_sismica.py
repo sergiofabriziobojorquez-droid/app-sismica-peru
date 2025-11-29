@@ -8,7 +8,7 @@ from scipy.linalg import eigh
 st.set_page_config(page_title="Ingeniería Sísmica PE", layout="centered")
 
 st.title("🇵🇪 Análisis Sísmico E.030")
-st.caption("Análisis Modal + Espectro + Desplazamientos + Fuerzas (Completo)")
+st.caption("Análisis Modal + Espectro + Desplazamientos + Fuerzas + Derivas")
 
 # ==========================================
 # 1. BLOQUE DE ENTRADA DE DATOS
@@ -49,17 +49,26 @@ with st.expander("📝 1. Configuración del Edificio y Sismo", expanded=True):
     R = c2.number_input("Reducción (R)", value=8.0, step=0.1)
     st.info(f"Parámetros: Z={Z} | U={U} | S={S} | Tp={Tp} | Tl={Tl}")
 
-    # C. MASA Y RIGIDEZ
-    st.markdown("### C. Masa y Rigidez por Piso")
+    # C. MASA, RIGIDEZ Y ALTURA
+    st.markdown("### C. Datos por Piso (Masa, Rigidez, Altura)")
     datos_masa = []
     datos_rigidez = []
+    datos_altura = []
     
+    h1, h2, h3 = st.columns(3)
+    h1.write("**Masa (Ton-s²/m)**")
+    h2.write("**Rigidez (Ton/m)**")
+    h3.write("**Altura h (m)**")
+
     for i in range(n_pisos):
-        col_m, col_k = st.columns(2)
-        m = col_m.number_input(f"Masa P{i+1}", value=10.0, key=f"m{i}")
-        k = col_k.number_input(f"Rigidez P{i+1}", value=1000.0, key=f"k{i}")
+        col_m, col_k, col_h = st.columns(3)
+        m = col_m.number_input(f"m{i+1}", value=10.0, label_visibility="collapsed", key=f"m{i}")
+        k = col_k.number_input(f"k{i+1}", value=1000.0, label_visibility="collapsed", key=f"k{i}")
+        h = col_h.number_input(f"h{i+1}", value=3.0, label_visibility="collapsed", key=f"h{i}")
+        
         datos_masa.append(m)
         datos_rigidez.append(k)
+        datos_altura.append(h)
 
 # ==========================================
 # 2. MOTOR DE CÁLCULO
@@ -93,12 +102,11 @@ if st.button("🚀 EJECUTAR ANÁLISIS COMPLETO", type="primary", use_container_w
         w2, modos_raw = eigh(K, M)
         w = np.sqrt(np.abs(w2))
         
-        # Ordenar (Periodo mayor a menor)
         idx = w.argsort()
         w = w[idx]
         modos_raw = modos_raw[:, idx] 
 
-        # Modos Escalados (Azotea = 1) -> TUS "VECTORES NORMALIZADOS"
+        # VECTORES NORMALIZADOS (Visuales, Azotea=1)
         modos_visual = np.zeros_like(modos_raw)
         for i in range(n):
             val_top = modos_raw[-1, i]
@@ -133,59 +141,66 @@ if st.button("🚀 EJECUTAR ANÁLISIS COMPLETO", type="primary", use_container_w
             
         df_part = pd.DataFrame(lista_participacion)
 
-        # --- C. CÁLCULO ESPECTRAL Y NUEVOS CÁLCULOS ---
+        # --- C. ESPECTRO Y RESPUESTAS ---
         data_espectro = []
         g = 9.81
         
         desplazamientos_modales = np.zeros((n, n))
         fuerzas_modales = np.zeros((n, n))
         
-        sa_values = []
-
         for i in range(n):
-            # 1. Espectro
+            # Espectro
             T = 2 * np.pi / w[i] if w[i] > 0 else 0
             C = calcular_C(T, Tp, Tl)
             Sa = (Z * U * C * S * g) / R
-            sa_values.append(Sa)
+            
+            # Sd = Sa / w^2
+            Sd = Sa / (w[i]**2) if w[i]>0 else 0
             
             data_espectro.append({
                 "Modo": i+1, "T (s)": T, "C": C, 
                 "Sa (m/s²)": Sa, "Sa (g)": Sa/g,
-                "Sd (m)": Sa / (w[i]**2) if w[i]>0 else 0
+                "Sd (m)": Sd
             })
             
-            # 2. Desplazamientos Modales (u_i = Sd * Gamma * Xi)
-            Sd = Sa / (w[i]**2) if w[i] > 0 else 0
+            # Desplazamientos Modales (u_i)
             u_i = Sd * gammas[i] * modos_visual[:, i]
             desplazamientos_modales[:, i] = u_i
             
-            # 3. Fuerzas Laterales Modales (f_i = Sa * Gamma * M * Xi)
+            # Fuerzas Modales (f_i)
             vector_M_Xi = np.dot(M, modos_visual[:, i])
             f_i = Sa * gammas[i] * vector_M_Xi
             fuerzas_modales[:, i] = f_i
             
         df_esp = pd.DataFrame(data_espectro)
 
-        # --- D. COMBINACIONES MODALES (DESPLAZAMIENTOS) ---
+        # --- D. COMBINACIONES Y DERIVAS ---
         u_sva = np.sum(np.abs(desplazamientos_modales), axis=1)
         u_rcsc = np.sqrt(np.sum(desplazamientos_modales**2, axis=1))
         u_final = 0.25 * u_sva + 0.75 * u_rcsc
         
+        desp_relativo = np.zeros(n)
         derivas = np.zeros(n)
-        derivas[0] = u_final[0]
-        for k in range(1, n):
-            derivas[k] = u_final[k] - u_final[k-1]
+        
+        for k in range(n):
+            h_piso = datos_altura[k]
+            if k == 0:
+                delta = u_final[0]
+            else:
+                delta = u_final[k] - u_final[k-1]
+            
+            desp_relativo[k] = delta
+            derivas[k] = delta / h_piso if h_piso > 0 else 0
 
         df_desp = pd.DataFrame({
             "Nivel": [f"Piso {k+1}" for k in range(n)],
-            "u (SVA) [m]": u_sva,
-            "u (RCSC) [m]": u_rcsc,
-            "u (25/75) [m]": u_final,
-            "Deriva Δ [m]": derivas
+            "u Absoluto [m]": u_final,
+            "Δ Relativo [m]": desp_relativo,
+            "Altura h [m]": datos_altura,
+            "Deriva (Δ/h)": derivas
         })
 
-        # --- E. COMBINACIONES MODALES (FUERZAS) ---
+        # --- E. COMBINACIONES DE FUERZAS ---
         f_sva = np.sum(np.abs(fuerzas_modales), axis=1)
         f_rcsc = np.sqrt(np.sum(fuerzas_modales**2, axis=1))
         f_final = 0.25 * f_sva + 0.75 * f_rcsc
@@ -198,9 +213,9 @@ if st.button("🚀 EJECUTAR ANÁLISIS COMPLETO", type="primary", use_container_w
         })
 
         # ==========================================
-        # 3. RESULTADOS EN PESTAÑAS (5 TABS)
+        # 3. PESTAÑAS DE RESULTADOS
         # ==========================================
-        tabs = st.tabs(["📊 Dinámica", "🔢 Matrices", "🇵🇪 Espectro", "📉 Desplazamientos", "🏗️ Fuerzas Lat."])
+        tabs = st.tabs(["📊 Dinámica", "🔢 Matrices", "🇵🇪 Espectro", "📉 Derivas", "🏗️ Fuerzas"])
 
         # 1. DINÁMICA
         with tabs[0]:
@@ -234,7 +249,12 @@ if st.button("🚀 EJECUTAR ANÁLISIS COMPLETO", type="primary", use_container_w
         # 3. ESPECTRO
         with tabs[2]:
             st.subheader("Aceleraciones y Desplazamientos Espectrales")
-            st.dataframe(df_esp.style.format("{:.4f}"), use_container_width=True)
+            # Aumenté decimales y notación científica para Sd
+            st.dataframe(df_esp.style.format({
+                "T (s)": "{:.4f}", "C": "{:.2f}", 
+                "Sa (m/s²)": "{:.4f}", "Sa (g)": "{:.4f}",
+                "Sd (m)": "{:.6f}"
+            }), use_container_width=True)
             
             t_plot = np.linspace(0.01, 4.0, 100)
             sa_plot = [(Z * U * calcular_C(t, Tp, Tl) * S * g)/R for t in t_plot]
@@ -245,51 +265,42 @@ if st.button("🚀 EJECUTAR ANÁLISIS COMPLETO", type="primary", use_container_w
             ax2.legend()
             st.pyplot(fig2)
 
-        # 4. DESPLAZAMIENTOS (CORREGIDO)
+        # 4. DERIVAS (CON NOTACIÓN CIENTÍFICA)
         with tabs[3]:
-            st.subheader("A. Desplazamientos por Modo (u_i)")
+            st.subheader("A. Desplazamientos Modales (u_i)")
             st.latex(r"u_i = S_{di} \cdot r_i \cdot X_i")
+            
+            # --- AQUÍ ESTÁ EL CAMBIO: Notación Científica (e) ---
             df_u_modos = pd.DataFrame(desplazamientos_modales, index=rows, columns=cols)
-            st.dataframe(df_u_modos.style.format("{:.4f}"), use_container_width=True)
+            st.dataframe(df_u_modos.style.format("{:.4e}"), use_container_width=True)
             
             st.divider()
-            st.subheader("B. Combinación Modal (Desplazamientos Totales)")
-            st.info("Regla Peruana: 0.25 SVA + 0.75 RCSC")
+            st.subheader("B. Control de Derivas (25/75)")
+            st.markdown(r"$\Delta_i = u_i - u_{i-1}$ (Desp. Relativo)")
+            st.markdown(r"$\text{Deriva}_i = \Delta_i / h_i$")
             
-            # --- AQUÍ ESTABA EL ERROR: Ahora especificamos las columnas exactas a formatear ---
+            # Formato de 6 decimales para ver derivas pequeñas
             st.dataframe(df_desp.style.format({
-                "u (SVA) [m]": "{:.4f}",
-                "u (RCSC) [m]": "{:.4f}",
-                "u (25/75) [m]": "{:.4f}",
-                "Deriva Δ [m]": "{:.4f}"
-            }).background_gradient(cmap="Oranges", subset=["u (25/75) [m]"]), use_container_width=True)
-            
-            st.write("**Gráfico de Perfil de Desplazamientos (25/75):**")
-            fig3, ax3 = plt.subplots(figsize=(4, 6))
-            perfil = np.concatenate(([0], u_final))
-            ax3.plot(perfil, np.arange(n+1), marker='D', color='purple', linewidth=2)
-            ax3.set_xlabel("Desplazamiento u (m)")
-            ax3.set_ylabel("Nivel")
-            ax3.grid(True)
-            st.pyplot(fig3)
+                "u Absoluto [m]": "{:.6f}",
+                "Δ Relativo [m]": "{:.6f}",
+                "Altura h [m]": "{:.2f}",
+                "Deriva (Δ/h)": "{:.6f}"
+            }).background_gradient(cmap="Oranges", subset=["Deriva (Δ/h)"]), use_container_width=True)
 
-        # 5. FUERZAS LATERALES (CORREGIDO)
+        # 5. FUERZAS
         with tabs[4]:
-            st.subheader("A. Fuerzas Laterales por Modo (f_i)")
+            st.subheader("A. Fuerzas Modales (f_i)")
             st.latex(r"f_i = S_{ai} \cdot r_i \cdot M \cdot X_i")
-            df_f_modos = pd.DataFrame(fuerzas_modales, index=rows, columns=cols)
-            st.dataframe(df_f_modos.style.format("{:.4f}"), use_container_width=True)
+            st.dataframe(pd.DataFrame(fuerzas_modales, index=rows, columns=cols).style.format("{:.4f}"), use_container_width=True)
             
             st.divider()
-            st.subheader("B. Combinación Modal (Fuerzas de Diseño)")
-            st.info("Fuerzas finales distribuidas en altura (Ton)")
-            
-            # --- CORREGIDO TAMBIÉN AQUÍ ---
+            st.subheader("B. Fuerzas de Diseño (25/75)")
             st.dataframe(df_fuerzas_comb.style.format({
                 "F (SVA) [Tn]": "{:.4f}",
                 "F (RCSC) [Tn]": "{:.4f}",
                 "F (25/75) [Tn]": "{:.4f}"
             }).background_gradient(cmap="Reds", subset=["F (25/75) [Tn]"]), use_container_width=True)
+
 
 
 
