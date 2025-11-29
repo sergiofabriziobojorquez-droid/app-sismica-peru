@@ -154,7 +154,6 @@ if st.button("🚀 EJECUTAR ANÁLISIS COMPLETO", type="primary", use_container_w
             C = calcular_C(T, Tp, Tl)
             Sa = (Z * U * C * S * g) / R
             
-            # Sd = Sa / w^2
             Sd = Sa / (w[i]**2) if w[i]>0 else 0
             
             data_espectro.append({
@@ -217,10 +216,20 @@ if st.button("🚀 EJECUTAR ANÁLISIS COMPLETO", type="primary", use_container_w
         # ==========================================
         tabs = st.tabs(["📊 Dinámica", "🔢 Matrices", "🇵🇪 Espectro", "📉 Derivas", "🏗️ Fuerzas"])
 
-        # 1. DINÁMICA
+        # 1. DINÁMICA (CORREGIDA)
         with tabs[0]:
             st.subheader("1. Frecuencias y Periodos")
-            st.table(pd.DataFrame({"Modo": range(1,n+1), "Periodo T (s)": [2*np.pi/val if val>0 else 0 for val in w]}))
+            # --- AQUÍ AÑADÍ OMEGA DE VUELTA ---
+            res_dinamica = []
+            for i in range(n):
+                T_val = 2 * np.pi / w[i] if w[i] > 0 else 0
+                res_dinamica.append({
+                    "Modo": i+1,
+                    "Periodo T (s)": f"{T_val:.4f}",
+                    "ω (rad/s)": f"{w[i]:.4f}" # Omega ha vuelto
+                })
+            st.table(pd.DataFrame(res_dinamica))
+
             st.subheader("2. Gráfico de Modos")
             fig, ax = plt.subplots(figsize=(4, 6))
             pisos_y = np.arange(n + 1)
@@ -249,7 +258,6 @@ if st.button("🚀 EJECUTAR ANÁLISIS COMPLETO", type="primary", use_container_w
         # 3. ESPECTRO
         with tabs[2]:
             st.subheader("Aceleraciones y Desplazamientos Espectrales")
-            # Aumenté decimales y notación científica para Sd
             st.dataframe(df_esp.style.format({
                 "T (s)": "{:.4f}", "C": "{:.2f}", 
                 "Sa (m/s²)": "{:.4f}", "Sa (g)": "{:.4f}",
@@ -265,12 +273,10 @@ if st.button("🚀 EJECUTAR ANÁLISIS COMPLETO", type="primary", use_container_w
             ax2.legend()
             st.pyplot(fig2)
 
-        # 4. DERIVAS (CON NOTACIÓN CIENTÍFICA)
+        # 4. DERIVAS
         with tabs[3]:
             st.subheader("A. Desplazamientos Modales (u_i)")
             st.latex(r"u_i = S_{di} \cdot r_i \cdot X_i")
-            
-            # --- AQUÍ ESTÁ EL CAMBIO: Notación Científica (e) ---
             df_u_modos = pd.DataFrame(desplazamientos_modales, index=rows, columns=cols)
             st.dataframe(df_u_modos.style.format("{:.4e}"), use_container_width=True)
             
@@ -279,7 +285,6 @@ if st.button("🚀 EJECUTAR ANÁLISIS COMPLETO", type="primary", use_container_w
             st.markdown(r"$\Delta_i = u_i - u_{i-1}$ (Desp. Relativo)")
             st.markdown(r"$\text{Deriva}_i = \Delta_i / h_i$")
             
-            # Formato de 6 decimales para ver derivas pequeñas
             st.dataframe(df_desp.style.format({
                 "u Absoluto [m]": "{:.6f}",
                 "Δ Relativo [m]": "{:.6f}",
