@@ -113,7 +113,7 @@ if st.button("🚀 EJECUTAR ANÁLISIS COMPLETO", type="primary", use_container_w
         
         lista_participacion = []
         suma_masa_efectiva = 0
-        gammas = [] # Guardamos gammas para usar luego
+        gammas = []
         
         for i in range(n):
             Xi = modos_visual[:, i]
@@ -137,11 +137,10 @@ if st.button("🚀 EJECUTAR ANÁLISIS COMPLETO", type="primary", use_container_w
         data_espectro = []
         g = 9.81
         
-        # Estructuras para guardar desplazamientos y fuerzas por modo
-        desplazamientos_modales = np.zeros((n, n)) # Filas: Pisos, Cols: Modos
-        fuerzas_modales = np.zeros((n, n))         # Filas: Pisos, Cols: Modos
+        desplazamientos_modales = np.zeros((n, n))
+        fuerzas_modales = np.zeros((n, n))
         
-        sa_values = [] # Para guardar Sa de cada modo
+        sa_values = []
 
         for i in range(n):
             # 1. Espectro
@@ -157,13 +156,11 @@ if st.button("🚀 EJECUTAR ANÁLISIS COMPLETO", type="primary", use_container_w
             })
             
             # 2. Desplazamientos Modales (u_i = Sd * Gamma * Xi)
-            # Sd = Sa / w^2
             Sd = Sa / (w[i]**2) if w[i] > 0 else 0
             u_i = Sd * gammas[i] * modos_visual[:, i]
             desplazamientos_modales[:, i] = u_i
             
             # 3. Fuerzas Laterales Modales (f_i = Sa * Gamma * M * Xi)
-            # M * Xi es un vector masa
             vector_M_Xi = np.dot(M, modos_visual[:, i])
             f_i = Sa * gammas[i] * vector_M_Xi
             fuerzas_modales[:, i] = f_i
@@ -171,16 +168,12 @@ if st.button("🚀 EJECUTAR ANÁLISIS COMPLETO", type="primary", use_container_w
         df_esp = pd.DataFrame(data_espectro)
 
         # --- D. COMBINACIONES MODALES (DESPLAZAMIENTOS) ---
-        # SVA (Suma Valores Absolutos)
         u_sva = np.sum(np.abs(desplazamientos_modales), axis=1)
-        # RCSC (Raíz Cuadrada Suma Cuadrados)
         u_rcsc = np.sqrt(np.sum(desplazamientos_modales**2, axis=1))
-        # 25% SVA + 75% RCSC
         u_final = 0.25 * u_sva + 0.75 * u_rcsc
         
-        # Desplazamientos Relativos (Derivas) para el 25/75
         derivas = np.zeros(n)
-        derivas[0] = u_final[0] # Piso 1 se mueve respecto al suelo (0)
+        derivas[0] = u_final[0]
         for k in range(1, n):
             derivas[k] = u_final[k] - u_final[k-1]
 
@@ -193,11 +186,8 @@ if st.button("🚀 EJECUTAR ANÁLISIS COMPLETO", type="primary", use_container_w
         })
 
         # --- E. COMBINACIONES MODALES (FUERZAS) ---
-        # SVA
         f_sva = np.sum(np.abs(fuerzas_modales), axis=1)
-        # RCSC
         f_rcsc = np.sqrt(np.sum(fuerzas_modales**2, axis=1))
-        # 25% SVA + 75% RCSC
         f_final = 0.25 * f_sva + 0.75 * f_rcsc
 
         df_fuerzas_comb = pd.DataFrame({
@@ -208,7 +198,7 @@ if st.button("🚀 EJECUTAR ANÁLISIS COMPLETO", type="primary", use_container_w
         })
 
         # ==========================================
-        # 3. RESULTADOS EN PESTAÑAS (AHORA SON 5)
+        # 3. RESULTADOS EN PESTAÑAS (5 TABS)
         # ==========================================
         tabs = st.tabs(["📊 Dinámica", "🔢 Matrices", "🇵🇪 Espectro", "📉 Desplazamientos", "🏗️ Fuerzas Lat."])
 
@@ -255,7 +245,7 @@ if st.button("🚀 EJECUTAR ANÁLISIS COMPLETO", type="primary", use_container_w
             ax2.legend()
             st.pyplot(fig2)
 
-        # 4. DESPLAZAMIENTOS (NUEVO)
+        # 4. DESPLAZAMIENTOS (CORREGIDO)
         with tabs[3]:
             st.subheader("A. Desplazamientos por Modo (u_i)")
             st.latex(r"u_i = S_{di} \cdot r_i \cdot X_i")
@@ -265,7 +255,14 @@ if st.button("🚀 EJECUTAR ANÁLISIS COMPLETO", type="primary", use_container_w
             st.divider()
             st.subheader("B. Combinación Modal (Desplazamientos Totales)")
             st.info("Regla Peruana: 0.25 SVA + 0.75 RCSC")
-            st.dataframe(df_desp.style.format("{:.4f}").background_gradient(cmap="Oranges", subset=["u (25/75) [m]"]), use_container_width=True)
+            
+            # --- AQUÍ ESTABA EL ERROR: Ahora especificamos las columnas exactas a formatear ---
+            st.dataframe(df_desp.style.format({
+                "u (SVA) [m]": "{:.4f}",
+                "u (RCSC) [m]": "{:.4f}",
+                "u (25/75) [m]": "{:.4f}",
+                "Deriva Δ [m]": "{:.4f}"
+            }).background_gradient(cmap="Oranges", subset=["u (25/75) [m]"]), use_container_width=True)
             
             st.write("**Gráfico de Perfil de Desplazamientos (25/75):**")
             fig3, ax3 = plt.subplots(figsize=(4, 6))
@@ -276,7 +273,7 @@ if st.button("🚀 EJECUTAR ANÁLISIS COMPLETO", type="primary", use_container_w
             ax3.grid(True)
             st.pyplot(fig3)
 
-        # 5. FUERZAS LATERALES (NUEVO)
+        # 5. FUERZAS LATERALES (CORREGIDO)
         with tabs[4]:
             st.subheader("A. Fuerzas Laterales por Modo (f_i)")
             st.latex(r"f_i = S_{ai} \cdot r_i \cdot M \cdot X_i")
@@ -286,7 +283,14 @@ if st.button("🚀 EJECUTAR ANÁLISIS COMPLETO", type="primary", use_container_w
             st.divider()
             st.subheader("B. Combinación Modal (Fuerzas de Diseño)")
             st.info("Fuerzas finales distribuidas en altura (Ton)")
-            st.dataframe(df_fuerzas_comb.style.format("{:.4f}").background_gradient(cmap="Reds", subset=["F (25/75) [Tn]"]), use_container_width=True)
+            
+            # --- CORREGIDO TAMBIÉN AQUÍ ---
+            st.dataframe(df_fuerzas_comb.style.format({
+                "F (SVA) [Tn]": "{:.4f}",
+                "F (RCSC) [Tn]": "{:.4f}",
+                "F (25/75) [Tn]": "{:.4f}"
+            }).background_gradient(cmap="Reds", subset=["F (25/75) [Tn]"]), use_container_width=True)
+
 
 
 
