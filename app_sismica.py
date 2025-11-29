@@ -8,7 +8,7 @@ from scipy.linalg import eigh
 st.set_page_config(page_title="Ingeniería Sísmica PE", layout="centered")
 
 st.title("🇵🇪 Análisis Sísmico E.030")
-st.caption("Análisis Modal + Espectro de Diseño + Masas Participativas")
+st.caption("Análisis Modal + Espectro de Diseño + Factores de Participación")
 
 # ==========================================
 # 1. BLOQUE DE ENTRADA DE DATOS
@@ -32,30 +32,21 @@ with st.expander("📝 1. Configuración del Edificio y Sismo", expanded=True):
     mapa_u = {"A (Esencial)": 1.5, "B (Importante)": 1.3, "C (Común)": 1.0}
     U = mapa_u[uso_idx]
     
-    # Suelo S (Con lógica automática de Tp y Tl)
+    # Suelo S
     suelo_lbl = c1.selectbox("Suelo (S)", ["S0 (Roca Dura)", "S1 (Roca/Rigido)", "S2 (Intermedio)", "S3 (Blando)"])
-    suelo_tipo = suelo_lbl.split()[0] # S0, S1, etc.
+    suelo_tipo = suelo_lbl.split()[0]
     
-    # Lógica Tabla S (Z vs Suelo)
     tabla_s = {
-        0.45: [0.80, 1.00, 1.05, 1.10], # Z4
-        0.35: [0.80, 1.00, 1.15, 1.20], # Z3
-        0.25: [0.80, 1.00, 1.20, 1.40], # Z2
-        0.10: [0.80, 1.00, 1.60, 2.00]  # Z1
+        0.45: [0.80, 1.00, 1.05, 1.10], 0.35: [0.80, 1.00, 1.15, 1.20],
+        0.25: [0.80, 1.00, 1.20, 1.40], 0.10: [0.80, 1.00, 1.60, 2.00]
     }
     idx_s = ["S0", "S1", "S2", "S3"].index(suelo_tipo)
     S = tabla_s[Z][idx_s]
     
-    # Tabla Tp y Tl
-    tabla_tp_tl = {
-        "S0": (0.3, 3.0), "S1": (0.4, 2.5), 
-        "S2": (0.6, 2.0), "S3": (1.0, 1.6)
-    }
+    tabla_tp_tl = {"S0": (0.3, 3.0), "S1": (0.4, 2.5), "S2": (0.6, 2.0), "S3": (1.0, 1.6)}
     Tp, Tl = tabla_tp_tl[suelo_tipo]
     
-    # Coeficiente R
     R = c2.number_input("Reducción (R)", value=8.0, step=0.1)
-
     st.info(f"Parámetros: Z={Z} | U={U} | S={S} | Tp={Tp} | Tl={Tl}")
 
     # C. MASA Y RIGIDEZ
@@ -63,7 +54,6 @@ with st.expander("📝 1. Configuración del Edificio y Sismo", expanded=True):
     datos_masa = []
     datos_rigidez = []
     
-    # Grid de entrada optimizado
     for i in range(n_pisos):
         col_m, col_k = st.columns(2)
         m = col_m.number_input(f"Masa P{i+1}", value=10.0, key=f"m{i}")
@@ -90,7 +80,6 @@ if st.button("🚀 EJECUTAR ANÁLISIS COMPLETO", type="primary", use_container_w
         M = np.diag(datos_masa)
         K = np.zeros((n, n))
 
-        # Matriz K (Shear Building)
         for i in range(n):
             k_act = datos_rigidez[i]
             if i < n - 1:
@@ -101,42 +90,49 @@ if st.button("🚀 EJECUTAR ANÁLISIS COMPLETO", type="primary", use_container_w
             else:
                 K[i, i] = k_act
 
-        # Valores propios (phi normalizado por masa)
-        w2, modos_masa = eigh(K, M)
+        w2, modos_raw = eigh(K, M)
         w = np.sqrt(np.abs(w2))
         
-        # Ordenar resultados (Periodo mayor a menor)
+        # Ordenar (Periodo mayor a menor)
         idx = w.argsort()
         w = w[idx]
-        modos_masa = modos_masa[:, idx] # phi normalizado
+        modos_raw = modos_raw[:, idx] # Estos salen normalizados por masa de eigh
 
-        # Modos Escalados (Azotea = 1) para visualización
-        modos_esc = np.zeros_like(modos_masa)
+        # Crear modos escalados (Azotea = 1) para usarlos en la fórmula de tu PPT
+        modos_visual = np.zeros_like(modos_raw)
         for i in range(n):
-            val_top = modos_masa[-1, i]
-            modos_esc[:, i] = modos_masa[:, i] / val_top if abs(val_top) > 1e-9 else modos_masa[:, i]
+            val_top = modos_raw[-1, i]
+            if abs(val_top) > 1e-9:
+                modos_visual[:, i] = modos_raw[:, i] / val_top 
+            else:
+                modos_visual[:, i] = modos_raw[:, i]
 
-        # --- B. CÁLCULO DE FACTORES DE PARTICIPACIÓN ---
-        # Vector de influencia r (para sismo horizontal es un vector de unos)
-        r = np.ones(n)
+        # --- B. CÁLCULO DE FACTORES DE PARTICIPACIÓN (SEGÚN TU IMAGEN) ---
+        # Vector de influencia r (vector columna de unos, tamaño = n_pisos)
+        vector_1 = np.ones(n) 
         masa_total = np.sum(datos_masa)
         
         lista_participacion = []
         suma_masa_efectiva = 0
         
         for i in range(n):
-            # Obtener el modo normalizado i
-            phi_i = modos_masa[:, i]
+            # Usamos el vector Xi (modos_visual) tal cual tu PPT
+            Xi = modos_visual[:, i]
             
-            # Cálculo del Factor de Participación Gamma
-            # Gamma = phi^T * M * r
-            # Como phi está normalizado respecto a masa, el denominador es 1.
-            gamma = np.dot(phi_i, np.dot(M, r))
+            # Numerador: Xi_transpuesta * M * 1
+            numerador = np.dot(Xi.T, np.dot(M, vector_1))
             
-            # Masa Efectiva = Gamma^2 (Para modos normalizados por masa)
-            masa_efectiva = gamma**2
+            # Denominador: Xi_transpuesta * M * Xi
+            denominador = np.dot(Xi.T, np.dot(M, Xi))
+            
+            # Factor de Participación (r_i o Gamma)
+            gamma = numerador / denominador
+            
+            # Masa Efectiva (Ojo con la fórmula de masa efectiva usando Gamma general)
+            # Meff = (Numerador^2) / Denominador  <-- Esta es la fórmula general consistente con tu r_i
+            masa_efectiva = (numerador**2) / denominador
+            
             porcentaje = (masa_efectiva / masa_total) * 100
-            
             suma_masa_efectiva += porcentaje
             
             lista_participacion.append({
@@ -173,28 +169,21 @@ if st.button("🚀 EJECUTAR ANÁLISIS COMPLETO", type="primary", use_container_w
         # ==========================================
         tab_din, tab_mat, tab_e030 = st.tabs(["📊 Dinámica", "🔢 Matrices y Factores", "🇵🇪 Espectro E.030"])
 
-        # --- PESTAÑA 1: DINÁMICA ---
         with tab_din:
             st.subheader("1. Frecuencias y Periodos")
             res_list = []
             for i in range(n):
                 T_val = 2 * np.pi / w[i] if w[i] > 0 else 0
-                res_list.append({
-                    "Modo": i+1, 
-                    "Periodo T (s)": f"{T_val:.4f}", 
-                    "ω (rad/s)": f"{w[i]:.4f}"
-                })
+                res_list.append({"Modo": i+1, "Periodo T (s)": f"{T_val:.4f}", "ω (rad/s)": f"{w[i]:.4f}"})
             st.table(pd.DataFrame(res_list))
 
             st.subheader("2. Gráfico de Modos")
             fig, ax = plt.subplots(figsize=(4, 6))
             pisos_y = np.arange(n + 1)
             colores = ['#e74c3c', '#3498db', '#2ecc71', '#f1c40f']
-            
             for i in range(min(3, n)):
-                forma = np.concatenate(([0], modos_esc[:, i]))
+                forma = np.concatenate(([0], modos_visual[:, i]))
                 ax.plot(forma, pisos_y, marker='o', label=f'Modo {i+1}', color=colores[i%4], linewidth=2)
-            
             ax.set_ylabel("Nivel")
             ax.set_xlabel("Desplazamiento Relativo")
             ax.grid(True, linestyle='--', alpha=0.5)
@@ -202,69 +191,47 @@ if st.button("🚀 EJECUTAR ANÁLISIS COMPLETO", type="primary", use_container_w
             ax.axvline(0, color='black', linewidth=1)
             st.pyplot(fig)
 
-        # --- PESTAÑA 2: MATRICES Y FACTORES (ACTUALIZADO) ---
         with tab_mat:
             cols = [f"Modo {i+1}" for i in range(n)]
             rows = [f"Piso {i+1}" for i in range(n)]
 
-            st.subheader("A. Modos Escalados (Visual)")
-            st.caption("Normalizados tal que la azotea = 1.00")
-            st.dataframe(pd.DataFrame(modos_esc, index=rows, columns=cols).style.format("{:.4f}"), use_container_width=True)
+            st.subheader("A. Modos Escalados (Xi)")
+            st.caption("Normalizados tal que Azotea = 1.00 (Usados para calcular Gamma)")
+            st.dataframe(pd.DataFrame(modos_visual, index=rows, columns=cols).style.format("{:.4f}"), use_container_width=True)
 
             st.divider()
             
-            st.subheader("B. Factores de Participación (Nuevo)")
-            st.caption("Verificar que % Acumulado supere el 90%")
+            st.subheader("B. Factores de Participación (r_i)")
+            st.latex(r"r_i = \frac{X_i^T \cdot M \cdot \{1\}}{X_i^T \cdot M \cdot X_i}")
+            
             st.dataframe(df_part.style.format({
                 "Gamma (Γ)": "{:.4f}",
                 "Masa Efec.": "{:.2f}",
                 "% Masa": "{:.2f}%",
                 "% Acumulado": "{:.2f}%"
             }).background_gradient(cmap="Greens", subset=["% Masa"]), use_container_width=True)
-            
-            st.divider()
-            
-            st.subheader("C. Modos Masa-Normalizados")
-            st.caption("Valores matemáticos ($φ^T M φ = I$)")
-            st.dataframe(pd.DataFrame(modos_masa, index=rows, columns=cols).style.background_gradient(cmap="Blues"), use_container_width=True)
 
-        # --- PESTAÑA 3: ESPECTRO E.030 ---
         with tab_e030:
             st.subheader("Aceleraciones Espectrales (Sa)")
             st.markdown(f"**Parámetros:** Z={Z}, U={U}, S={S}, R={R}")
-            
-            st.dataframe(df_esp.style.format({
-                "T (s)": "{:.4f}", 
-                "C": "{:.2f}", 
-                "Sa (m/s²)": "{:.4f}", 
-                "Sa (g)": "{:.4f}"
-            }), use_container_width=True)
+            st.dataframe(df_esp.style.format({"T (s)": "{:.4f}", "C": "{:.2f}", "Sa (m/s²)": "{:.4f}", "Sa (g)": "{:.4f}"}), use_container_width=True)
             
             st.divider()
             st.subheader("Gráfico del Espectro de Diseño")
-            
             t_plot = np.linspace(0.01, 4.0, 100)
             sa_plot = [(Z * U * calcular_C(t, Tp, Tl) * S * g)/R for t in t_plot]
-            
             fig2, ax2 = plt.subplots(figsize=(6, 4))
             ax2.plot(t_plot, sa_plot, label="Espectro E.030", color="navy", linewidth=2)
-            
             t_modos = df_esp["T (s)"]
             sa_modos = df_esp["Sa (m/s²)"]
             ax2.scatter(t_modos, sa_modos, color="red", zorder=5, s=50, label="Modos Estructurales")
-            
             for i, txt in enumerate(t_modos):
                 ax2.annotate(f"M{i+1}", (t_modos[i], sa_modos[i]), xytext=(0,10), textcoords="offset points", ha='center', fontsize=8)
-            
             ax2.set_xlabel("Periodo T (s)")
             ax2.set_ylabel("Pseudo-Aceleración Sa (m/s²)")
             ax2.grid(True, linestyle="--", alpha=0.5)
             ax2.legend()
-            
             st.pyplot(fig2)
-            
-            cols = [f"Modo {i+1}" for i in range(n)]
-            rows = [f"Piso {i+1}" for i in range(n)]
-            st.dataframe(pd.DataFrame(modos_vis, index=rows, columns=cols).style.format("{:.3f}"), use_container_width=True)
+
 
 
