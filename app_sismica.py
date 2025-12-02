@@ -8,7 +8,7 @@ from scipy.linalg import eigh
 st.set_page_config(page_title="Sismica E.030 - S.B.A.", layout="centered")
 
 # --- ENCABEZADO PERSONALIZADO (MODIFICADO) ---
-st.title("🏗️ Análisis Modal Espectral - E0.30")
+st.title("🏗️ Análisis Modal Espectral - E.030")
 st.markdown("*By S. B. A.*")  # <--- Firma pequeña y en cursiva
 st.caption("Análisis Modal + Espectro + Desplazamientos + Fuerzas + Derivas")
 st.divider()
@@ -321,6 +321,7 @@ if st.button("🚀 EJECUTAR ANÁLISIS COMPLETO", type="primary", use_container_w
                 "F (RCSC) [Tn]": "{:.4f}",
                 "F (25/75) [Tn]": "{:.4f}"
             }).background_gradient(cmap="Reds", subset=["F (25/75) [Tn]"]), use_container_width=True)
+
 
 
 
