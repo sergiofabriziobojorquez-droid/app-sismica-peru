@@ -5,11 +5,11 @@ import matplotlib.pyplot as plt
 from scipy.linalg import eigh
 
 # --- CONFIGURACIÓN GENERAL ---
-st.set_page_config(page_title="Sismica E.030 - Ing. Sergio B.A.", layout="centered")
+st.set_page_config(page_title="Sismica E.030 - S.B.A.", layout="centered")
 
-# --- ENCABEZADO PERSONALIZADO ---
+# --- ENCABEZADO PERSONALIZADO (MODIFICADO) ---
 st.title("🏗️ Análisis Modal Espectral - E0.30")
-st.markdown("### By Ing. B. A. Sergio")
+st.markdown("*By S. B. A.*")  # <--- Firma pequeña y en cursiva
 st.caption("Análisis Modal + Espectro + Desplazamientos + Fuerzas + Derivas")
 st.divider()
 
@@ -177,10 +177,12 @@ if st.button("🚀 EJECUTAR ANÁLISIS COMPLETO", type="primary", use_container_w
         df_esp = pd.DataFrame(data_espectro)
 
         # --- D. COMBINACIONES Y DERIVAS ---
+        # 1. Criterios de Combinación
         u_sva = np.sum(np.abs(desplazamientos_modales), axis=1)
         u_rcsc = np.sqrt(np.sum(desplazamientos_modales**2, axis=1))
-        u_final = 0.25 * u_sva + 0.75 * u_rcsc
+        u_final = 0.25 * u_sva + 0.75 * u_rcsc 
         
+        # 2. Derivas
         desp_relativo = np.zeros(n)
         derivas = np.zeros(n)
         
@@ -219,7 +221,7 @@ if st.button("🚀 EJECUTAR ANÁLISIS COMPLETO", type="primary", use_container_w
         # ==========================================
         # 3. PESTAÑAS DE RESULTADOS
         # ==========================================
-        tabs = st.tabs(["📊 Dinámica", "🔢 Matrices", "🇵🇪 Espectro", "📉 Derivas", "🏗️ Fuerzas"])
+        tabs = st.tabs(["📊 Dinámica", "🔢 Matrices", "🇵🇪 Espectro", "📉 Desplazamientos", "🏗️ Fuerzas"])
 
         # 1. DINÁMICA
         with tabs[0]:
@@ -277,7 +279,7 @@ if st.button("🚀 EJECUTAR ANÁLISIS COMPLETO", type="primary", use_container_w
             ax2.legend()
             st.pyplot(fig2)
 
-        # 4. DERIVAS
+        # 4. DESPLAZAMIENTOS
         with tabs[3]:
             st.subheader("A. Desplazamientos Modales (u_i)")
             st.latex(r"u_i = S_{di} \cdot r_i \cdot X_i")
@@ -319,6 +321,7 @@ if st.button("🚀 EJECUTAR ANÁLISIS COMPLETO", type="primary", use_container_w
                 "F (RCSC) [Tn]": "{:.4f}",
                 "F (25/75) [Tn]": "{:.4f}"
             }).background_gradient(cmap="Reds", subset=["F (25/75) [Tn]"]), use_container_width=True)
+
 
 
 
