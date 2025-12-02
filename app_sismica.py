@@ -5,10 +5,13 @@ import matplotlib.pyplot as plt
 from scipy.linalg import eigh
 
 # --- CONFIGURACIÓN GENERAL ---
-st.set_page_config(page_title="Ingeniería Sísmica PE", layout="centered")
+st.set_page_config(page_title="Sismica E.030 - Ing. Sergio B.A.", layout="centered")
 
-st.title("🇵🇪 Análisis Sísmico E.030")
+# --- ENCABEZADO PERSONALIZADO ---
+st.title("🏗️ Análisis Modal Espectral - E0.30")
+st.markdown("### By Ing. B. A. Sergio")
 st.caption("Análisis Modal + Espectro + Desplazamientos + Fuerzas + Derivas")
+st.divider()
 
 # ==========================================
 # 1. BLOQUE DE ENTRADA DE DATOS
@@ -149,6 +152,7 @@ if st.button("🚀 EJECUTAR ANÁLISIS COMPLETO", type="primary", use_container_w
         fuerzas_modales = np.zeros((n, n))
         
         for i in range(n):
+            # Espectro
             T = 2 * np.pi / w[i] if w[i] > 0 else 0
             C = calcular_C(T, Tp, Tl)
             Sa = (Z * U * C * S * g) / R
@@ -161,9 +165,11 @@ if st.button("🚀 EJECUTAR ANÁLISIS COMPLETO", type="primary", use_container_w
                 "Sd (m)": Sd
             })
             
+            # Desplazamientos Modales (u_i)
             u_i = Sd * gammas[i] * modos_visual[:, i]
             desplazamientos_modales[:, i] = u_i
             
+            # Fuerzas Modales (f_i)
             vector_M_Xi = np.dot(M, modos_visual[:, i])
             f_i = Sa * gammas[i] * vector_M_Xi
             fuerzas_modales[:, i] = f_i
@@ -171,12 +177,10 @@ if st.button("🚀 EJECUTAR ANÁLISIS COMPLETO", type="primary", use_container_w
         df_esp = pd.DataFrame(data_espectro)
 
         # --- D. COMBINACIONES Y DERIVAS ---
-        # 1. Criterios de Combinación
         u_sva = np.sum(np.abs(desplazamientos_modales), axis=1)
         u_rcsc = np.sqrt(np.sum(desplazamientos_modales**2, axis=1))
-        u_final = 0.25 * u_sva + 0.75 * u_rcsc # Desplazamiento Total (Absoluto)
+        u_final = 0.25 * u_sva + 0.75 * u_rcsc
         
-        # 2. Derivas
         desp_relativo = np.zeros(n)
         derivas = np.zeros(n)
         
@@ -190,11 +194,10 @@ if st.button("🚀 EJECUTAR ANÁLISIS COMPLETO", type="primary", use_container_w
             desp_relativo[k] = delta
             derivas[k] = delta / h_piso if h_piso > 0 else 0
 
-        # Tabla consolidada con Criterios + Derivas
         df_desp = pd.DataFrame({
             "Nivel": [f"Piso {k+1}" for k in range(n)],
-            "u (SVA) [m]": u_sva,       # <-- AÑADIDO
-            "u (RCSC) [m]": u_rcsc,     # <-- AÑADIDO
+            "u (SVA) [m]": u_sva,
+            "u (RCSC) [m]": u_rcsc,
             "u (25/75) [m]": u_final,
             "Δ Relativo [m]": desp_relativo,
             "Altura h [m]": datos_altura,
@@ -216,12 +219,11 @@ if st.button("🚀 EJECUTAR ANÁLISIS COMPLETO", type="primary", use_container_w
         # ==========================================
         # 3. PESTAÑAS DE RESULTADOS
         # ==========================================
-        tabs = st.tabs(["📊 Dinámica", "🔢 Matrices", "🇵🇪 Espectro", "📉 Desplazamientos", "🏗️ Fuerzas"])
+        tabs = st.tabs(["📊 Dinámica", "🔢 Matrices", "🇵🇪 Espectro", "📉 Derivas", "🏗️ Fuerzas"])
 
         # 1. DINÁMICA
         with tabs[0]:
             st.subheader("1. Frecuencias y Periodos")
-            # --- OMEGA IS BACK ---
             res_dinamica = []
             for i in range(n):
                 T_val = 2 * np.pi / w[i] if w[i] > 0 else 0
@@ -275,7 +277,7 @@ if st.button("🚀 EJECUTAR ANÁLISIS COMPLETO", type="primary", use_container_w
             ax2.legend()
             st.pyplot(fig2)
 
-        # 4. DESPLAZAMIENTOS
+        # 4. DERIVAS
         with tabs[3]:
             st.subheader("A. Desplazamientos Modales (u_i)")
             st.latex(r"u_i = S_{di} \cdot r_i \cdot X_i")
@@ -286,10 +288,9 @@ if st.button("🚀 EJECUTAR ANÁLISIS COMPLETO", type="primary", use_container_w
             st.subheader("B. Combinación y Control de Derivas")
             st.info("Regla E.030: Desplazamiento = 0.25 SVA + 0.75 RCSC")
             
-            # --- TABLA COMPLETA CON CRITERIOS Y DERIVAS ---
             st.dataframe(df_desp.style.format({
-                "u (SVA) [m]": "{:.6f}",    # Restaurado
-                "u (RCSC) [m]": "{:.6f}",   # Restaurado
+                "u (SVA) [m]": "{:.6f}",
+                "u (RCSC) [m]": "{:.6f}",
                 "u (25/75) [m]": "{:.6f}",
                 "Δ Relativo [m]": "{:.6f}",
                 "Altura h [m]": "{:.2f}",
@@ -318,6 +319,7 @@ if st.button("🚀 EJECUTAR ANÁLISIS COMPLETO", type="primary", use_container_w
                 "F (RCSC) [Tn]": "{:.4f}",
                 "F (25/75) [Tn]": "{:.4f}"
             }).background_gradient(cmap="Reds", subset=["F (25/75) [Tn]"]), use_container_width=True)
+
 
 
 
